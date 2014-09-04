@@ -1,0 +1,15 @@
+activate
+bin
+pkg
+python
+
+syntax: glob
+
+*.mo
+*.mogo
+src/*/locale/*go.pot
+src/*/locale/*/*.go
+src/bitbucket.org
+src/github.com
+
+syntax: regexp
