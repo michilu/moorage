@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/samuel/go-gettext/gettext"
-	"go-scaffold/locale/ja"
 )
 
 const (
@@ -157,8 +156,6 @@ func getCatalog() (result *gettext.Catalog, err error) {
 	var mo []byte
 
 	switch getLANGUAGE() {
-	case "ja":
-		mo = ja.Mo()
 	}
 	if mo != nil {
 		catalog, err = gettext.ParseMO(bytes.NewReader(mo))
