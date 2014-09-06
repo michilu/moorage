@@ -8,14 +8,19 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
+	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 
+	"github.com/r7kamura/entoverse"
 	"github.com/samuel/go-gettext/gettext"
 )
 
@@ -24,6 +29,24 @@ const (
 
 	majorVersion = "0.0"
 	maxGoroutine = 100
+
+	hostPatern = "^((?P<commit>[0-9a-f]{7})\\.)?(?P<refspec>[^\\.]+)\\.(?P<repository_name>[^\\.]+)\\.(?P<repository_owner>[^\\.]+)\\.(?P<repository_service>.+)\\.(?P<moorage_server>moorage):(?P<moorage_server_port>[0-9]+)$"
+	runCommand = `
+cd /opt/src;
+if ! (
+  git clone --branch ${refspec} --single-branch --depth=1 https://${repository_service}/${repository_owner}/${repository_name}.git ${repository_service}/${repository_owner}/${repository_name}
+ ); then
+ ( cd ${repository_service}/${repository_owner}/${repository_name} &&
+   git fetch --depth=1 --force origin ${refspec} &&
+   git checkout --force origin/${refspec}
+ )
+fi;
+docker build --tag=${repository_service}/${repository_owner}/${repository_name}:${refspec} $(pwd)/${repository_service}/${repository_owner}/${repository_name} &&
+docker run --detach --publish-all --name=${refspec}.${repository_name}.${repository_owner}.${repository_service} ${repository_service}/${repository_owner}/${repository_name}:${refspec}
+`
+	inspectCommand = `
+docker inspect --format="{{.NetworkSettings.IPAddress}}{{range \$$i, \$$e := .NetworkSettings.Ports}}:{{\$$i}}{{end}}" ${refspec}.${repository_name}.${repository_owner}.${repository_service}
+`
 )
 
 type debugT bool
@@ -83,6 +106,7 @@ var (
 	memStats           runtime.MemStats
 	minorVersion       string
 	name               string
+	reHostPatern       = regexp.MustCompile(hostPatern)
 	semaphoreFile      chan int
 	semaphoreFileCount = maxProcesses * 2 * 2
 	semaphoreHTTP      chan int
@@ -236,6 +260,71 @@ func process() {
 	var err error
 
 	AddWaitGroup(func() {})
+
+	hostConverter := func(originalHost string) string {
+
+		develop.Println(originalHost)
+		originalHost = "master.docker-http-server-hello-world.MiCHiLU.github.com.moorage:3000"
+		//originalHost = "6d211fa.docker.timecard-rails.MiCHiLU.github.com.moorage:3000"
+		originalHost = strings.ToLower(originalHost)
+
+		if !reHostPatern.MatchString(originalHost) {
+			//	return
+		}
+
+		//develop.Println(reHostPatern.ReplaceAllString(originalHost, runCommand))
+		cmd := exec.Command("sh", "-c", reHostPatern.ReplaceAllString(originalHost, runCommand))
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		err := cmd.Run()
+		if err != nil {
+			log.Print(err)
+		}
+
+		cmd = exec.Command("sh", "-c", reHostPatern.ReplaceAllString(originalHost, inspectCommand))
+		var out bytes.Buffer
+		cmd.Stdout = &out
+		err = cmd.Run()
+		if err != nil {
+			log.Print(err)
+		}
+		var output string
+		output = out.String()
+		develop.Println(reHostPatern.ReplaceAllString(originalHost, inspectCommand))
+		develop.Println(out)
+		var ip_port []string
+		ip_port = strings.Split(output, ":")
+		var ip string
+		ip = ip_port[0]
+		var port int
+		var port_another int
+		var protocol string
+		for _, port_protocol_line := range ip_port[1:] {
+			var port_protocol []string
+			port_protocol = strings.SplitN(port_protocol_line, "/", 2)
+			protocol = port_protocol[1]
+			if port == 0 {
+				port, err = strconv.Atoi(port_protocol[0])
+			} else if protocol != "udp" {
+				port_another, err = strconv.Atoi(port_protocol[0])
+				if port > port_another {
+					port = port_another
+				}
+			}
+		}
+
+		develop.Println(fmt.Sprintf("%s:%d", ip, port))
+		if ip != "" && port != 0 {
+			return fmt.Sprintf("%s:%d", ip, port)
+		}
+		return ""
+	}
+
+	// Creates an entoverse.Proxy object as an HTTP handler.
+	proxy := entoverse.NewProxyWithHostConverter(hostConverter)
+
+	// Runs a reverse-proxy server on http://localhost:3000/
+	http.ListenAndServe(":3000", proxy)
 
 	if err != nil {
 		develop.Println(err)
