@@ -264,15 +264,12 @@ func process() {
 	hostConverter := func(originalHost string) string {
 
 		develop.Println(originalHost)
-		originalHost = "master.docker-http-server-hello-world.MiCHiLU.github.com.moorage:3000"
-		//originalHost = "6d211fa.docker.timecard-rails.MiCHiLU.github.com.moorage:3000"
 		originalHost = strings.ToLower(originalHost)
 
 		if !reHostPatern.MatchString(originalHost) {
-			//	return
+			return ""
 		}
 
-		//develop.Println(reHostPatern.ReplaceAllString(originalHost, runCommand))
 		cmd := exec.Command("sh", "-c", reHostPatern.ReplaceAllString(originalHost, runCommand))
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
