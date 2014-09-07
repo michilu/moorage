@@ -72,7 +72,9 @@ all: $(GO) $(LOCALE) test
 	  echo "*** FAILED on $$failures ***";\
 	  exit 1;\
 	fi
-	@cd bin && mkdir -p darwin_amd64 && cp -p $(PROJECT) darwin_amd64
+	@if [[ "$(PLATFORMS)" =~ .*darwin_amd64.* ]]; then\
+		cd bin && mkdir -p darwin_amd64 && cp -p $(PROJECT) darwin_amd64 ;\
+	fi
 	@cd bin && zip -FS $(PROJECT)-$(VERSION)-unix.zip [dfl]*/$(PROJECT)
 	@if [[ "$(PLATFORMS)" =~ .*windows.* ]]; then\
 		cd bin && zip -FS $(PROJECT)-$(VERSION)-win.zip windows_*/$(PROJECT).exe ;\
